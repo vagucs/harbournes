@@ -36,7 +36,7 @@ Made With MingW and Allegro.
 
 ### Usage
 
-nes.exe <rom>
+nes.exe rom.nes
 
 ### Contacts
 
