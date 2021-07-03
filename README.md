@@ -13,7 +13,7 @@ compile.bat
 
 ### Optimizations
 
-Harbor is a tool for using commercial applications.
+Harbour is a tool for using commercial applications.
 
 For emulation it works slow, however this work can be used so that the build is optimized and improved.
 
