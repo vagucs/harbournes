@@ -1,6 +1,8 @@
 ### Summary
 
-Nes emulator written in Harbour compiler
+Nes emulator written in Harbour compiler.
+
+Perhaps it is the best source for developing other emulators for high-level languages.
 
 Based on beaultiful project
 
