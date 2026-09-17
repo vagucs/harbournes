@@ -362,9 +362,13 @@ METHOD writeDMA(value) CLASS PPU
    local address
    //cpu := ::console:CPU
    address := (((value) << 8) & 0xFFFF) 
+
    for i := 0 to 255
+      if len(::oamData) < ::oamAddress+1
+         aadd(::oamData,0)
+      end if
+      ::oamData[::oamAddress+1] = (::console:cpu:memory:Read(address))
       ::oamAddress++
-      ::oamData[::oamAddress] = (::console:cpu:memory:Read(address))
       address++
    end if
    ::Memory:console:CPU:stall += 513

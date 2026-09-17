@@ -1,0 +1,31 @@
+CROSS_HOST="x86_64-w64-mingw32"
+inherit cross
+
+NAME="mingw64-x86_64-SDL2_mixer"
+VERSION=2.0.2
+RELEASE=1
+CATEGORY="Devel"
+SUMMARY="SDL2 audio loading library for Win64 toolchain"
+DESCRIPTION="This is the Simple DirectMedia Layer, a general API that provides
+low level access to audio, keyboard, mouse, joystick, 3D hardware via OpenGL,
+and 2D framebuffer across multiple platforms."
+HOMEPAGE="http://www.libsdl.org/projects/SDL_mixer/"
+SRC_URI="${HOMEPAGE}/release/SDL2_mixer-${VERSION}.tar.gz"
+SRC_DIR="SDL2_mixer-${VERSION}"
+PATCH_URI="
+	1.2.12-windres.patch
+"
+
+# The included libtool macros have been hacked for the *-*-mingw* target to
+# produce SDL2_mixer.dll (instead of the usual libSDL2_mixer-2-0-0.dll) and to
+# set deplibs_check_method=pass_all (to allow linking with -ldxguid, which is
+# static).  Therefore, we must use these macros and the corresponding ltmain.sh.
+NO_LIBTOOLIZE=1
+ACLOCAL_FLAGS="-I acinclude"
+
+CYGCONF_ARGS="
+	--enable-music-midi-native
+	--disable-music-midi-timidity
+	--disable-music-mp3-smpeg
+	--disable-music-mp3-mad-gpl
+"

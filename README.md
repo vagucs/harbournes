@@ -11,18 +11,21 @@ https://github.com/fogleman/nes
 ### Compiler
 To compile use:
 
+Copy harbour and mingw-4.8.1 to c:\ and run:
+
+c:\mingw-4.8.1\start.bat
+
 compile.bat
 
 ### Optimizations
 
-Harbour is a tool for using commercial applications.
+Harbour is a opensource project.
 
 For emulation it works slow, however this work can be used so that the build is optimized and improved.
 
 ### Todo
 
 - APU
-- Controller
 
 I'm sorry, my time is short for the project, I hope someone collaborates.
 

@@ -157,10 +157,6 @@ clear
 ? "Criando console virtual"
 hNes=Console():New(cFilename)
 
-? "----- Mapper"
-? "PRG Banks(1): ",hNes:Mapper:prgBank
-? "PRG Banks(2): ",hNes:Mapper:prgBank1
-? "PRG Banks(3): ",hNes:Mapper:prgBank2
 //? "----- CHR"
 //xStr=left(hNes:Mapper:Cartridge:CHR,16)
 

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<package id="manifest-0-036-a978-a2c2ac">
+    <release tarname="binutils-2.25.1-1-mingw32-dev.tar.xz" />
+    <references>
+        <sysroot id="sysroot-0-002-a7c6-d7dbb5" />
+    </references>
+    <manifest>
+        <dir path="include" />
+        <file path="include/ansidecl.h" />
+        <file path="include/plugin-api.h" />
+        <file path="include/bfdlink.h" />
+        <file path="include/dis-asm.h" />
+        <file path="include/symcat.h" />
+        <file path="include/bfd.h" />
+        <dir path="lib" />
+        <file path="lib/libbfd.a" />
+        <file path="lib/libopcodes.a" />
+        <file path="lib/libbfd.la" />
+        <file path="lib/libopcodes.la" />
+    </manifest>
+</package>

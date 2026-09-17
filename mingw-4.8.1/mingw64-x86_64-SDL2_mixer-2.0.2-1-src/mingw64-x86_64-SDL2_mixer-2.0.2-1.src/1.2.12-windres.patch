@@ -1,0 +1,16 @@
+--- origsrc/SDL_mixer-1.2.12/configure.in	2013-11-24 16:14:37.385595900 -0600
++++ src/SDL_mixer-1.2.12/configure.in	2013-11-24 16:15:35.746933900 -0600
+@@ -48,12 +48,7 @@ AC_PROG_LIBTOOL
+ AC_PROG_CC
+ AC_PROG_INSTALL
+ AC_PROG_MAKE_SET
+-if test -z "$host_alias"; then
+-    hostaliaswindres=
+-else
+-    hostaliaswindres="$host_alias-windres"
+-fi
+-AC_CHECK_PROGS(WINDRES, [windres $hostaliaswindres $host_os-windres])
++AC_CHECK_TOOL(WINDRES, windres)
+ 
+ dnl Set up the compiler and linker flags
+ case "$host" in

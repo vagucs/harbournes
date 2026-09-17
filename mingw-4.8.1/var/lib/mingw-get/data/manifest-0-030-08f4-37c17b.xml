@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<package id="manifest-0-030-08f4-37c17b">
+    <release tarname="libz-1.2.8-1-mingw32-dev-1.tar" />
+    <references>
+        <sysroot id="sysroot-0-002-a7c6-d7dbb5" />
+    </references>
+    <manifest>
+        <dir path="include" />
+        <file path="include/zconf.h" />
+        <file path="include/zlib.h" />
+        <dir path="lib" />
+        <file path="lib/libz.a" />
+        <file path="lib/libz.dll.a" />
+        <dir path="mingw32" />
+        <dir path="mingw32/include" />
+        <file path="mingw32/include/zconf.h" />
+        <file path="mingw32/include/zlib.h" />
+        <dir path="mingw32/lib" />
+        <file path="mingw32/lib/libz.a" />
+        <file path="mingw32/lib/libz.dll.a" />
+    </manifest>
+</package>

@@ -129,9 +129,9 @@ function PadDebugLine( cLabel, oPad )
                " hits=" + str( oPad:readHits ) )
 
 procedure ShowNesControls()
-   @ 52, 2 say "Controles P1: Z=A  X=B  Enter=Start  Shift=Select  Setas=Dir"
-   @ 53, 2 say "Controles P2: Num1=A Num3=B Num0=Start Num.=Select Num8/4/2/6=Dir"
-   @ 54, 2 say "F9/F10=fast-forward skip (0=off, pula render)   ESC=sair"
+   @ 32, 2 say "Controles P1: Z=A  X=B  Enter=Start  Shift=Select  Setas=Dir"
+   @ 33, 2 say "Controles P2: Num1=A Num3=B Num0=Start Num.=Select Num8/4/2/6=Dir"
+   @ 34, 2 say "F9/F10=fast-forward skip (0=off, pula render)   ESC=sair"
 
 procedure ShowEmuStatsPanel()
    @  2, 97 say "Frame:   0"

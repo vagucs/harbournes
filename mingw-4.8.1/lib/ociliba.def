@@ -1,0 +1,2 @@
+; dlltool -z ociliba.def --export-all-symbol ociliba.dll
+EXPORTS
