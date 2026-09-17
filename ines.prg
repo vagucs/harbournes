@@ -1,4 +1,4 @@
-#define XHB_BITOP // Habilita das operações | & ^^
+#define XHB_BITOP // Habilita das operaÃ§Ãµes | & ^^
 
 #include "xhb.ch"
 #include "common.ch"
@@ -116,6 +116,16 @@ if header:NumCHR == 0
 	//chr = repl(chr(0),8192)
 	chr = aAloc(0,8192)
 end if
+
+/*
+h=fcreate("prg.txt")
+fwrite(h,vprg,len(vprg))
+fclose(h)
+alert(left(vchr,100))
+h=fcreate("vchr.txt")
+fwrite(h,vchr,len(vchr))
+fclose(h)
+*/
 
 // success
 return Cartridge():New(prg, chr, mapper, mirror, battery)

@@ -1,5 +1,6 @@
-//#define XHB_BITOP // Habilita das operações | & ^^
+//#define XHB_BITOP // Habilita das operaÃ§Ãµes | & ^^
 
+#include "nesopt.ch"
 #include "xhb.ch"
 #include "common.ch"
 #include "hbclass.ch"
@@ -45,7 +46,8 @@ CREATE CLASS PPU
    VAR attributeTableByte INIT 0
    VAR lowTileByte        INIT 0
    VAR highTileByte       INIT 0
-   VAR tileData           INIT 0
+   VAR tileDataHi         INIT 0  // upper 32 bits of 64-bit background shift register
+   VAR tileDataLo         INIT 0  // lower 32 bits of 64-bit background shift register
 
    // sprite temporary variables
    VAR spriteCount      INIT 0
@@ -81,6 +83,12 @@ CREATE CLASS PPU
 
    // $2007 PPUDATA
    VAR bufferedData INIT 0 // for buffered reads
+
+#ifdef OTIMIZADO
+   VAR hitSpriteI     INIT 0
+   VAR hitSpriteColor INIT 0
+   VAR backBuffer     INIT 0
+#endif
    
    METHOD New(console)
    METHOD Reset()
@@ -105,11 +113,14 @@ CREATE CLASS PPU
    METHOD copyY()
    METHOD nmiChange()
    METHOD setVerticalBlank()
+   METHOD signalVerticalBlank()
    METHOD clearVerticalBlank()
+   METHOD handleScanlineEvents(lSwap)
    METHOD fetchNameTableByte()
    METHOD fetchAttributeTableByte()
    METHOD fetchLowTileByte()
    METHOD fetchHighTileByte()
+   METHOD shiftTileData()
    METHOD storeTileData()
    METHOD fetchTileData()
    METHOD backgroundPixel()
@@ -119,6 +130,9 @@ CREATE CLASS PPU
    METHOD evaluateSprites()
    METHOD tick()
    METHOD Step()
+   METHOD AdvanceCycles(count)
+   METHOD FastStep()
+   METHOD SwapFrameBuffers()
    METHOD PPUStatus()
    METHOD CHRView()
 END CLASS
@@ -128,6 +142,9 @@ METHOD New(console) CLASS PPU
    ::Console = console
    ::front = image():new(0,0,256,240) //image.NewRGBA(image.Rect(0, 0, 256, 240)) // Suspeito
    ::back = image():new(0,0,256,240) //image.NewRGBA(image.Rect(0, 0, 256, 240))
+#ifdef OTIMIZADO
+   ::backBuffer := ::back:Buffer
+#endif
 
    ::Reset()
    return Self
@@ -146,16 +163,17 @@ METHOD PPUStatus() CLASS PPU
    @ 24,70 say "attributeTableByte : "+str(::attributeTableByte)
    @ 25,70 say "lowTileByte        : "+str(::lowTileByte)
    @ 26,70 say "highTileByte       : "+str(::highTileByte)
-   @ 27,70 say "tileData           : "+str(::tileData)+space(16)
-   @ 28,70 say "spriteCount        : "+str(::spriteCount)
-   @ 29,70 say "flagNameTable      : "+str(::flagNameTable)
-   @ 30,70 say "flagIncrement      : "+str(::flagIncrement)
-   @ 31,70 say "flagSpriteTable    : "+str(::flagSpriteTable)
-   @ 32,70 say "flagBackgroundTable: "+str(::flagBackgroundTable)
-   @ 33,70 say "flagSpriteSize     : "+str(::flagSpriteSize)
-   @ 34,70 say "flagMasterSlave    : "+str(::flagMasterSlave)
-   @ 35,70 say "renderingEnabled   : "+iif(::flagShowBackground != 0 .or. ::flagShowSprites != 0,"RENDER","      ")
-   @ 36,70 say "scanline           : "+str(::scanline)
+   @ 27,70 say "tileDataHi         : "+hb_numtohex(::tileDataHi)+"    "
+   @ 28,70 say "tileDataLo         : "+hb_numtohex(::tileDataLo)+"    "
+   @ 29,70 say "spriteCount        : "+str(::spriteCount)
+   @ 30,70 say "flagNameTable      : "+str(::flagNameTable)
+   @ 31,70 say "flagIncrement      : "+str(::flagIncrement)
+   @ 32,70 say "flagSpriteTable    : "+str(::flagSpriteTable)
+   @ 33,70 say "flagBackgroundTable: "+str(::flagBackgroundTable)
+   @ 34,70 say "flagSpriteSize     : "+str(::flagSpriteSize)
+   @ 35,70 say "flagMasterSlave    : "+str(::flagMasterSlave)
+   @ 36,70 say "renderingEnabled   : "+iif(::flagShowBackground != 0 .or. ::flagShowSprites != 0,"RENDER","      ")
+   @ 37,70 say "scanline           : "+str(::scanline)
 
 
 METHOD Reset() CLASS PPU
@@ -167,22 +185,18 @@ METHOD Reset() CLASS PPU
    ::writeOAMAddress(0)
 
 METHOD readPalette(address) CLASS PPU
-   //clog("READPALETTE")
    if address >= 16 .and. address % 4 == 0
       address -= 16
    end if
-   //clog("RET: ",(::paletteData[address+1]))
    return (::paletteData[address+1])
 
 METHOD writePalette(address, value) CLASS PPU
-   //clog("writePalette")
    if address >= 16 .and. address % 4 == 0
       address -= 16
    end if
    ::paletteData[address+1] = (value)
 
 METHOD readRegister(address) CLASS PPU
-   //clog("Read PPU register: ",address)
    do case
       case address=0x2002
          return ::readStatus()
@@ -194,16 +208,7 @@ METHOD readRegister(address) CLASS PPU
    return 0
 
 METHOD writeRegister(address, value) CLASS PPU
-   /*
-   ppi := 2
 
-   while ( !Empty(ProcName(ppi)) )
-      plog(ProcName(ppi)+"("+str(ProcLine(ppi))+") - "+procfile(ppi))
-      ppi++
-   end do
-   */
-
-   //clog("Write register: ",address," = ",value)
    ::register = value
    do case
       case address=0x2000
@@ -236,16 +241,8 @@ METHOD writeControl(value) CLASS PPU
    ::nmiOutput           = ((value>>7) & 1) == 1
    ::nmiChange()
 
-   //clog("flagNameTable: ",::flagNameTable)
-   //clog("flagIncrement: ",::flagIncrement)
-   //clog("flagSpriteTable: ",::flagSpriteTable)
-   //clog("flagBackgroundTable: ",::flagBackgroundTable)
-   //clog("flagSpriteSize: ",::flagSpriteSize)
-   //clog("flagMasterSlave: ",::flagMasterSlave)
-
    // t: ....BA.. ........ = d: ......BA
    ::t = ((::t & 0xF3FF) | ((value) & 0x03) << 10)
-   //clog("t: ",::t)
 
 // $2001: PPUMASK
 METHOD writeMask(value) CLASS PPU
@@ -259,21 +256,12 @@ METHOD writeMask(value) CLASS PPU
    ::flagGreenTint          = ((value >> 6) & 1)
    ::flagBlueTint           = ((value >> 7) & 1)
    
-   //clog("flagGrayscale: ",::flagGrayscale)
-   //clog("flagShowLeftBackground: ",::flagShowLeftBackground)
-   //clog("flagShowLeftSprites: ",::flagShowLeftSprites)
-   //clog("flagShowBackground: ",::flagShowBackground)
-   //clog("flagShowSprites: ",::flagShowSprites)
-   //clog("flagRedTint: ",::flagRedTint)
-   //clog("flagGreenTint: ",::flagGreenTint)
-   //clog("flagGreenTint: ",::flagGreenTint)
-
 // $2002: PPUSTATUS
 METHOD readStatus() CLASS PPU
    result := (::register & 0x1F)
    result  = (result | (::flagSpriteOverflow << 5))
    result  = (result | (::flagSpriteZeroHit << 6))
-   //clog("PPU READSTATUS: ",result)
+
    if ::nmiOccurred
       result = (result | (1 << 7))
    end if
@@ -285,23 +273,23 @@ METHOD readStatus() CLASS PPU
 
 // $2003: OAMADDR
 METHOD writeOAMAddress(value) CLASS PPU
-   //clog("WRITE OAM ADDR: ",value)
+
    ::oamAddress = value
 
 // $2004: OAMDATA (read)
 METHOD readOAMData() CLASS PPU
-   //clog("READ OAM DATA")
+
    return (::oamData[::oamAddress+1])
 
 // $2004: OAMDATA (write)
 METHOD writeOAMData(value) CLASS PPU
-   //clog("WRITE OAM DATA: ",::oamAddress," = ",value)
+
    ::oamData[::oamAddress+1] = (value)
    ::oamAddress++
 
 // $2005: PPUSCROLL
 METHOD writeScroll(value) CLASS PPU
-   //clog("writeScroll")
+
    if ::w == 0
       // t: ........ ...HGFED = d: HGFED...
       // x:               CBA = d: .....CBA
@@ -319,7 +307,6 @@ METHOD writeScroll(value) CLASS PPU
 
 // $2006: PPUADDR
 METHOD writeAddress(value) CLASS PPU
-   //clog("writeAddress")
    if ::w == 0
       // t: ..FEDCBA ........ = d: ..FEDCBA
       // t: .X...... ........ = 0
@@ -348,7 +335,7 @@ METHOD readData() CLASS PPU
       value = buffered
    else
       ::bufferedData = ::Memory:Read(::v - 0x1000)
-      //alert("read ppu2:"+hb_numtohex(::v - 0x1000))
+
    end if
    // increment address
    if ::flagIncrement == 0
@@ -356,12 +343,12 @@ METHOD readData() CLASS PPU
    else
       ::v += 32
    end if
-   //clog("READDATA PPU: ",value)
+
    return value
 
 // $2007: PPUDATA (write)
 METHOD writeData(value) CLASS PPU
-   //clog("PPU WRITEDATA: ",::v," = ",value)
+
    ::Memory:Write(::v, value)
    if ::flagIncrement == 0
       ::v += 1
@@ -373,7 +360,6 @@ METHOD writeData(value) CLASS PPU
 // $4014: OAMDMA
 METHOD writeDMA(value) CLASS PPU
    local address
-   //clog("WRITE DMA: ",value)
    //cpu := ::console:CPU
    address := (((value) << 8) & 0xFFFF) 
    for i := 0 to 255
@@ -391,7 +377,6 @@ METHOD writeDMA(value) CLASS PPU
 METHOD incrementX() CLASS PPU
    // increment hori(v)
    // if coarse X == 31
-   //clog("PPU INC X")
    if (::v & 0x001F) == 31
       // coarse X = 0
       ::v = ((::v & 0xFFE0) & 0xFFFF)
@@ -450,55 +435,74 @@ METHOD nmiChange() CLASS PPU
    end if
    ::nmiPrevious = nmi
 
-METHOD setVerticalBlank() CLASS PPU
-   //_draw_sprite(::front:Buffer,::Back:Buffer,0,0)
-   _stretch_sprite(_get_buffer(),hNes:ppu:back:Buffer(),0,0,256*3,240*3)
+METHOD SwapFrameBuffers() CLASS PPU
+   local tmp
+   tmp := ::front
+   ::front := ::back
+   ::back := tmp
+#ifdef OTIMIZADO
+   ::backBuffer := ::back:Buffer
+#endif
 
-   //::front       = ::back 
-   //::back        = ::front  // Suspeito
+METHOD setVerticalBlank() CLASS PPU
+#ifdef OTIMIZADO
+   ::SwapFrameBuffers()
+#else
+   _stretch_sprite(_get_buffer(),hNes:ppu:back:Buffer(),0,0,256*3,240*3)
+#endif
+   ::signalVerticalBlank()
+
+METHOD signalVerticalBlank() CLASS PPU
    ::nmiOccurred = .t.
    ::nmiChange()
+
+METHOD handleScanlineEvents(lSwap) CLASS PPU
+   if ::ScanLine == 241 .and. ::Cycle == 1
+      if lSwap
+         ::setVerticalBlank()
+      else
+         ::signalVerticalBlank()
+      end if
+   end if
+   if ::ScanLine == 261 .and. ::Cycle == 1
+      ::clearVerticalBlank()
+      ::flagSpriteZeroHit = 0
+      ::flagSpriteOverflow = 0
+   end if
 
 METHOD clearVerticalBlank() CLASS PPU
    ::nmiOccurred = .f.
    ::nmiChange()
 
 METHOD fetchNameTableByte() CLASS PPU
-   //clog("Name table: ",(0x2000 | (::v & 0x0FFF)))
    ::nameTableByte = ::Memory:Read((0x2000 | (::v & 0x0FFF)))
-   //clog("nameTableByte value: ",::nameTableByte)
 
-METHOD fetchAttributeTableByte() CLASS PPU // Revisado endereços batem com o MESEN
+METHOD fetchAttributeTableByte() CLASS PPU // Revisado endereÃ§os batem com o MESEN
    local v,address,shift
    v := ::v
+
    address := ((((0x23C0 | (v & 0x0C00)) | ((v >> 4) & 0x38)) | ((v >> 2) & 0x07)))
-   shift   := (((((v >> 4) & 0xFF)) & 4) | (v & 2))
-   // AQUI COM ERRO
-   ::attributeTableByte = (((((::Memory:Read(address) >> shift) & 0xFF) & 3) << 2))
-   //clog("fetchAttributeTableByte: v: ",v," - Address: ",address," - Shift: ",shift," - Attr: ",::attributeTableByte)
+
+   shift := (((v >> 4) & 4) | (v & 2))
+
+   ::attributeTableByte = ((((::Memory:Read(address) >> shift) & 3) << 2))
 
 METHOD fetchLowTileByte() CLASS PPU // Revisada OK
    local fineY,table,tile,address
    fineY         := ((::v >> 12) & 7)
    table         := ::flagBackgroundTable
-   tile          := ::nameTableByte
+   tile          := (::nameTableByte & 0xFFFF)
    address       := 0x1000 * table + tile * 16 + fineY
    ::lowTileByte := ::Memory:Read(address)
-   //clog("fetchLowTileByte: ",::lowTileByte)
 
 METHOD fetchHighTileByte() CLASS PPU
    local fineY,table,tile,address
-   //clog("fetchHighTileByte")
+
    fineY          := ((::v >> 12) & 7)
-   //clog("fineY: ",fineY)
    table          := ::flagBackgroundTable
-   //clog("table: ",table)
    tile           := ::nameTableByte
-   //clog("tile: ",tile)
    address        := 0x1000 * table + tile * 16 + fineY
-   //clog("address: ",address)
    ::highTileByte := ::Memory:Read(address + 8)
-   //clog("fetchHighTileByte: ",::highTileByte)
 
 METHOD storeTileData() CLASS PPU
    local data:=0,i,a,p1,p2
@@ -509,38 +513,51 @@ METHOD storeTileData() CLASS PPU
       ::lowTileByte  := ((::lowTileByte << 1))
       ::highTileByte := ((::highTileByte << 1))
 
-      //if i=0
-      //   data=0
-      //else
-         data           := ((data << 4))
-      //end if
+      data           := ((data << 4))
 
-      //clog("storeTileData - i: ",i," a: ",a," p1: ",p1," p2: ",p2," low: ",::lowTileByte," high: ",::highTileByte)
-      data           := (data | ((a | p1) | p2)) // Suspeito
+      data           := (data | (((a | p1) | p2) & 0xFFFF)) // Suspeito
    next
-   //clog("64:",data)
-   ::tileData := (::tileData | data)
-   //clog("Tile Data: ", ::tileData)
+   ::tileDataLo := ((::tileDataLo | (data & 0xFFFFFFFF)) & 0xFFFFFFFF)
+
+METHOD shiftTileData() CLASS PPU
+   ::tileDataHi := (((::tileDataHi << 4) | ((::tileDataLo >> 28) & 0xF)) & 0xFFFFFFFF)
+   ::tileDataLo := ((::tileDataLo << 4) & 0xFFFFFFFF)
 
 METHOD fetchTileData() CLASS PPU
-   //clog("fetchTileData: ",::tileData)
-   //clog("fetchTileData: ",(::tileData >> 32))
-   return ((::tileData >> 32))
+   return (::tileDataHi & 0xFFFFFFFF)
 
 METHOD backgroundPixel() CLASS PPU
    local data
    if ::flagShowBackground == 0
-      //clog("backgroundPixel: OFF")
       return 0
    end if
-   //clog("backgroundPixel: ON")
    data := (::fetchTileData() >> ((7 - ::X) * 4))
-   //clog("backgroundPixel: ",(data & 0x0F))
    return (data & 0x0F)
 
 METHOD spritePixel() CLASS PPU
    local offset,color,i
-   //clog("spritepixel")
+#ifdef OTIMIZADO
+   ::hitSpriteI := 0
+   ::hitSpriteColor := 0
+   if ::flagShowSprites == 0
+      return NIL
+   end if
+   for i := 0 to ::spriteCount-1
+      offset := (::Cycle - 1) - ::spritePositions[i+1]
+      if offset < 0 .or. offset > 7
+         loop
+      end if
+      offset = 7 - offset
+      color := ((::spritePatterns[i+1] >> (offset * 4)) & 0x0F)
+      if color % 4 == 0
+         loop
+      end if
+      ::hitSpriteI := i
+      ::hitSpriteColor := color
+      return NIL
+   next
+   return NIL
+#else
    if ::flagShowSprites == 0
       return {0,0}
    end if
@@ -555,24 +572,25 @@ METHOD spritePixel() CLASS PPU
          loop
       end if
       return {i, color}
-      //return {i,hb_randomint(0,255)}
    next
    return {0, 0}
+#endif
 
 METHOD renderPixel() CLASS PPU
-   local x,y,background,sprite,i,b,s,color,c
+   local x,y,background,sprite,i,b,s,color,c,palAddr
    x          := ::Cycle - 1
    y          := ::ScanLine
    background := ::backgroundPixel()
-   
-   //clog("Background: ",background)
-   
-   sprite     := ::spritePixel()
-   i          := sprite[1]
-   sprite     := sprite[2]
 
-   //clog("i: ",i)
-   //clog("sprite: ",sprite)
+#ifdef OTIMIZADO
+   ::spritePixel()
+   i      := ::hitSpriteI
+   sprite := ::hitSpriteColor
+#else
+   sprite := ::spritePixel()
+   i      := sprite[1]
+   sprite := sprite[2]
+#endif
 
    if x < 8 .and. ::flagShowLeftBackground == 0
       background := 0
@@ -603,15 +621,24 @@ METHOD renderPixel() CLASS PPU
       end if
    end if
 
+#ifdef OTIMIZADO
+   palAddr := color
+   if palAddr >= 16 .and. palAddr % 4 == 0
+      palAddr -= 16
+   end if
+   c := PaletteColors[(::paletteData[palAddr+1] % 64) + 1]
+   PutPixelFast( ::backBuffer, x, y, c )
+#else
    c := Palette[(::readPalette(color) % 64)+1]
-   ::back:SetRGBA(x, y, c) // Suspeito
+   ::back:SetRGBA(x, y, c)
+#endif
 
 METHOD fetchSpritePattern(i, row) CLASS PPU
    local tile,attributes,address,table,a,lowTileByte,highTileByte,data,p1,p2
-   tile := (::oamData[i*4+2])
-   attributes := (::oamData[i*4+3])
+   tile := (::oamData[(i*4)+2])
+   attributes := (::oamData[(i*4)+3])
    address=0
-   //clog("FETCHSPRITEPATTERN")
+
    if ::flagSpriteSize == 0
       if (attributes & 0x80) == 0x80
          row = 7 - row
@@ -664,9 +691,9 @@ METHOD evaluateSprites() CLASS PPU
    end if
    count := 1
    for i := 0 to 63
-      y   := (::oamData[i*4+1])
-      a   := (::oamData[i*4+3])
-      x   := (::oamData[i*4+4])
+      y   := (::oamData[(i*4)+1])
+      a   := (::oamData[(i*4)+3])
+      x   := (::oamData[(i*4)+4])
       row := ::ScanLine - y
       if row < 0 .or. row >= h
          loop
@@ -687,12 +714,13 @@ METHOD evaluateSprites() CLASS PPU
 
 // tick updates Cycle, ScanLine and Frame counters
 METHOD tick() CLASS PPU
-   ////clog("Tick")
+
    if ::nmiDelay > 0
       ::nmiDelay--
       if ::nmiDelay == 0 .and. ::nmiOutput .and. ::nmiOccurred
-         ////clog("NMI")
+
          ::console:CPU:triggerNMI()
+
       end if
    end if
 
@@ -702,7 +730,6 @@ METHOD tick() CLASS PPU
          ::ScanLine = 0
          ::Frame++
          ::f = (::f ^^ 1)
-         //clog("f: ",::f)
          return
       end if
    end if
@@ -719,6 +746,23 @@ METHOD tick() CLASS PPU
          //clog("f2: ",::f)
       end if
    end if
+
+   RETURN NIL
+
+#ifdef OTIMIZADO
+// Avanca varios ciclos PPU sem render/fetch (rendering desligado)
+METHOD AdvanceCycles(count) CLASS PPU
+   local i
+   for i := 1 to count
+      ::tick()
+      ::handleScanlineEvents( .t. )
+   next
+   return NIL
+
+METHOD FastStep() CLASS PPU
+   ::tick()
+   ::handleScanlineEvents( .f. )
+#endif
 
 // Step executes a single PPU cycle
 METHOD Step() CLASS PPU
@@ -737,55 +781,42 @@ METHOD Step() CLASS PPU
    //   renderingEnabled=.f.
    //end if
 
-
    // background logic
    if renderingEnabled
       if visibleLine .and. visibleCycle
-         //if ::Frame % 2 = 0
-            ::renderPixel()
-         //end if
+         ::renderPixel()
       end if
       if renderLine .and. fetchCycle
 
-         ::tileData = (::tileData << 4)
+         ::shiftTileData()
 
          xCase=::Cycle % 8
-         //clog("case cycle")
          do case 
             case xCase=1
-               //clog("fetchNameTableByte")
                ::fetchNameTableByte()
             case xCase=3
-               //clog("fetchAttributeTableByte")
                ::fetchAttributeTableByte()
             case xCase=5
-               //clog("fetchLowTileByte")
                ::fetchLowTileByte()
             case xCase=7
-               //clog("fetchHighTileByte")
                ::fetchHighTileByte()
             case xCase=0
-               //clog("storeTileData")
                ::storeTileData()
          end case
       end if
 
       if preLine .and. ::Cycle >= 280 .and. ::Cycle <= 304
-         //clog("COPYY")
          ::copyY()
       end if
 
       if renderLine
          if fetchCycle .and. ::Cycle % 8 == 0
-            //clog("incrementX")
             ::incrementX()
          end if
          if ::Cycle == 256
-            //clog("incrementY")
             ::incrementY()
          end if
          if ::Cycle == 257
-            //clog("copyX")
             ::copyX()
          end if
       end if
@@ -839,14 +870,6 @@ METHOD CHRView() CLASS PPU
       
       gr_clear_to_color(tile[len(tile)],makecol(0,0,0))
 
-      //char=pattern0+pattern1
-
-      //str="$"+hb_numtohex(p,4)+" - "+char+" - "
-      //for i=1 to len(char)
-      //   str+=hb_numtohex(asc(substr(char,i,1)),2)+" "
-      //next
-   
-      //@ 20,0 say str
       if len(pattern0)>=8 .and. len(pattern1)>=8
          for x = 0 to 7
             for y = 0 to 7
@@ -937,18 +960,6 @@ METHOD CHRView() CLASS PPU
    */
    inkey(0)
 
-procedure plog(...)
-local nH
-if file("ppu.txt")
-   nH=fopen("ppu.txt",2)
-else
-   nH=fcreate("ppu.txt")
-end if
-fseek(nH,0,2)
-aeval( hb_aParams(),{|x|fwrite(nH,st(x))})
-fwrite(nH,chr(10))
-fclose(nH)
-   
 procedure st(x)
 if valtype(x)='N'
    return str(x)
@@ -962,124 +973,33 @@ end if
 HB_FUNC( HB_QBITAND )
 {
    hb_retnint(hb_parnl(1) & hb_parnl(2));
-   /*
-   HB_MAXINT lValue;
-
-   if( hb_numParam( 1, &lValue ) )
-   {
-      int iPCount = hb_pcount() - 1, i = 1;
-      do
-      {
-         HB_MAXINT lNext;
-         if( ! hb_numParam( ++i, &lNext ) )
-            return;
-         lValue &= lNext;
-      }
-      while( --iPCount > 0 );
-      hb_retnint( lValue );
-   }*/
 }
 
 HB_FUNC( HB_QBITOR )
 {
    hb_retnint(hb_parnl(1) | hb_parnl(2));
-   /*HB_MAXINT lValue;
-
-   if( hb_numParam( 1, &lValue ) )
-   {
-      int iPCount = hb_pcount() - 1, i = 1;
-      do
-      {
-         HB_MAXINT lNext;
-         if( ! hb_numParam( ++i, &lNext ) )
-            return;
-         lValue |= lNext;
-      }
-      while( --iPCount > 0 );
-      hb_retnint( lValue );
-   }*/
 }
 
 HB_FUNC( HB_QBITXOR )
 {
    hb_retnint(hb_parnl(1) ^ hb_parnl(2));
-   /*
-   HB_MAXINT lValue;
-
-   if( hb_numParam( 1, &lValue ) )
-   {
-      int iPCount = hb_pcount() - 1, i = 1;
-      do
-      {
-         HB_MAXINT lNext;
-         if( ! hb_numParam( ++i, &lNext ) )
-            return;
-         lValue ^= lNext;
-      }
-      while( --iPCount > 0 );
-      hb_retnint( lValue );
-   }*/
 }
 
 HB_FUNC( HB_QBITNOT )
 {
    hb_retnint(~hb_parnl(1));
-   //HB_MAXINT lValue;
-
-   //if( hb_numParam( 1, &lValue ) )
-   //   hb_retnint( ~lValue );
 }
 
-/*HB_FUNC( HB_QBITTEST )
-{
-   HB_MAXINT lValue, lBit;
 
-   if( hb_numParam( 1, &lValue ) && hb_numParam( 2, &lBit ) )
-      hb_retl( ( lValue & ( ( HB_MAXINT ) 1 << lBit ) ) != 0 );
-}
-
-HB_FUNC( HB_QBITSET )
-{
-   HB_MAXINT lValue, lBit;
-
-   if( hb_numParam( 1, &lValue ) && hb_numParam( 2, &lBit ) )
-      hb_retnint( lValue | ( ( HB_MAXINT ) 1 << lBit ) );
-}
-
-HB_FUNC( HB_QBITRESET )
-{
-   HB_MAXINT lValue, lBit;
-
-   if( hb_numParam( 1, &lValue ) && hb_numParam( 2, &lBit ) )
-      hb_retnint( lValue & ( ~( ( HB_MAXINT ) 1 << lBit ) ) );
-}
-*/
 HB_FUNC( HB_QLBITSHIFT )
 {
 
    hb_retnint( hb_parnl(1) << hb_parni(2) );
-/*   HB_MAXINT lValue, lBits;
-
-   if( hb_numParam( 1, &lValue ) && hb_numParam( 2, &lBits ) )
-   {
-      if( lBits < 0 )
-         hb_retnint( lValue >> -lBits );
-      else
-   }*/
 }
 
 HB_FUNC( HB_QRBITSHIFT )
 {
    hb_retnint( hb_parnl(1) >> -hb_parni(2) );
-/*   HB_MAXINT lValue, lBits;
-
-   if( hb_numParam( 1, &lValue ) && hb_numParam( 2, &lBits ) )
-   {
-      if( lBits < 0 )
-         hb_retnint( lValue >> -lBits );
-      else
-         hb_retnint( lValue << lBits );
-   }*/
 }
 
 #pragma ENDDUMP

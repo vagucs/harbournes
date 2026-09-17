@@ -1,3 +1,4 @@
+#include "nesopt.ch"
 #include "common.ch"
 #include "hbclass.ch"
 
@@ -50,5 +51,9 @@ METHOD SETRGBA(x,y,cor) CLASS Image
    
    //_draw_sprite(_get_buffer(),::Buffer,::Y,::X)
    
+#ifdef OTIMIZADO
+   PutPixelFast( ::Buffer, x, y, cor )
+#else
    PutPixel(::Buffer,x,y,cor)
+#endif
    

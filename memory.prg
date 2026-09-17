@@ -1,5 +1,6 @@
-#define XHB_BITOP // Habilita das operações | & ^^
+#define XHB_BITOP // Habilita das operaÃ§Ãµes | & ^^
 
+#include "nesopt.ch"
 #include "xhb.ch"
 #include "common.ch"
 #include "hbclass.ch"
@@ -34,58 +35,51 @@ METHOD Read(address) CLASS Memory
    #endif
 	do case
 	   case address < 0x2000
-         #ifdef SHOWLOG
 	   	X=::console:RAM[(address % 0x0800)+1]
+         #ifdef SHOWLOG
          clog("MEM.Read: ",address," = ",x)
-		   return x
          #endif
-		   return ::console:RAM[(address % 0x0800)+1]
+		   return x
 	   case address < 0x4000
 	      //alert("READ MEM:"+hb_numtohex(0x2000 + address % 8))
-         #ifdef SHOWLOG
 	      X=::console:PPU:readRegister(0x2000 + address % 8)
+         #ifdef SHOWLOG
          clog("MEM.Read: ",address," - Value: ",x)
-		   return x
          #endif
-		   return ::console:PPU:readRegister(0x2000 + address % 8)
+		   return x
 	   case address == 0x4014
-         #ifdef SHOWLOG
 	   	X=::console:PPU:readRegister(address)
+         #ifdef SHOWLOG
          clog("MEM.Read: ",address," - Value: ",x)
-		   return x
          #endif
-		   return ::console:PPU:readRegister(address)
+		   return x
 	   case address == 0x4015
-         #ifdef SHOWLOG
 	   	X=::console:APU:readRegister(address)
+         #ifdef SHOWLOG
          clog("MEM.Read: ",address," - Value: ",x)
-		   return x
          #endif
-		   return ::console:APU:readRegister(address)
+		   return x
 	   case address == 0x4016
-         #ifdef SHOWLOG
 	   	X=::console:Controller1:Read()
-         clog("MEM.Read: ",address," - Value: ",x)
-		   return x
-         #endif
-		   return ::console:Controller1:Read()
-	   case address == 0x4017
          #ifdef SHOWLOG
-	   	X=::console:Controller2:Read()
          clog("MEM.Read: ",address," - Value: ",x)
-		   return x
          #endif
-		   return ::console:Controller2:Read()
+		   return x
+	   case address == 0x4017
+	   	X=::console:Controller2:Read()
+         #ifdef SHOWLOG
+         clog("MEM.Read: ",address," - Value: ",x)
+         #endif
+		   return x
 	   case address < 0x6000
 	   	// TODO: I/O registers
 	   case address >= 0x6000
-	      #ifdef SHOWLOG
 	      v=address
 	      x=::console:Mapper:Read(address)
+	      #ifdef SHOWLOG
 	      clog("Lendo do MAPPER: ",v," = ",x)
-	   	return x
 	      #endif
-	   	return ::console:Mapper:Read(address)
+	   	return x
 	   default
 	   	? "unhandled cpu memory read at address: ", address
 	end case
@@ -98,8 +92,7 @@ METHOD Write(address, value) CLASS Memory
    #endif
 	do case
 	   case address < 0x2000
-	   	//::console:RAM[(address % 0x0800)+1] = value
-	   	::console:RAM[address+1] = value
+	   	::console:RAM[(address % 0x0800)+1] = value
 	   case address < 0x4000
 	   	::console:PPU:writeRegister(0x2000 + address % 8, value)
 	   case address < 0x4014
@@ -136,33 +129,35 @@ METHOD New(console) CLASS ppuMemory
 	return Self
 
 METHOD Read(address) CLASS ppuMemory
-	//address = address % 0x4000
+#ifdef OTIMIZADO
+   local idx
+#endif
+	address = address % 0x4000
 	do case
 	   case address < 0x2000
-         #ifdef SHOWLOG
          x=::console:Mapper:Read(address)
-         clog("PPU.Read1: ",address," - Value: ",x)
-		   return x
-         #endif
-		   return ::console:Mapper:Read(address)
-	   case address < 0x3F00
          #ifdef SHOWLOG
+         clog("PPU.Read1: ",address," - Value: ",x)
+         #endif
+		   return x
+	   case address < 0x3F00
+#ifdef OTIMIZADO
+         idx := MirrorAddress( ::console:Cartridge:Mirror, address ) % 2048
+         x := ::console:PPU:nameTableData[idx + 1]
+#else
 		   mode := ::console:Cartridge:Mirror
 		   clog("Mode: ",mode)
 		   clog("Adress: ",MirrorAddress(mode, address) % 2048)
          x=(::console:PPU:nameTableData[(MirrorAddress(mode, address) % 2048)+1])
          clog("PPU.Read2: ",(MirrorAddress(mode, address) % 2048)," = ",x)
+#endif
 		   return x
-		   #endif
-		   mode := ::console:Cartridge:Mirror
-		   return (::console:PPU:nameTableData[(MirrorAddress(mode, address) % 2048)+1])
 	   case address < 0x4000
-         #ifdef SHOWLOG
 	      x=::console:PPU:readPalette(address % 32)
+#ifndef OTIMIZADO
 	      clog("PPU.Read3: ",address % 32," = ",x)
+#endif
 		   return x
-		   #endif
-		   return ::console:PPU:readPalette(address % 32)
 	   default
 		   ? "unhandled ppu memory read at address: ", address
 	end case

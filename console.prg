@@ -1,5 +1,6 @@
-#define XHB_BITOP // Habilita das operações | & ^^
+#define XHB_BITOP // Habilita das operaÃ§Ãµes | & ^^
 
+#include "nesopt.ch"
 #include "xhb.ch"
 #include "common.ch"
 #include "hbclass.ch"
@@ -17,7 +18,9 @@ CREATE CLASS Console
 	METHOD NEW(path)
 	METHOD Reset()
 	METHOD Step()
+	METHOD StepFast()
 	METHOD StepFrame()
+	METHOD StepFrameFast()
 	METHOD StepSeconds(seconds)
 	METHOD Buffer()
 	METHOD BackgroundColor()
@@ -63,16 +66,26 @@ METHOD Reset() CLASS Console
 	::CPU:Reset()
 
 METHOD Step() CLASS Console
-   local i
+   local i, ppuCycles, cpuCycles
 
 	cpuCycles := ::CPU:Step()
 	ppuCycles := cpuCycles * 3
 
-	for i := 1 to ppuCycles
+#ifdef OTIMIZADO
+   if ::PPU:flagShowBackground == 0 .and. ::PPU:flagShowSprites == 0
+      ::PPU:AdvanceCycles( ppuCycles )
+   else
+      for i := 1 to ppuCycles
+         ::PPU:Step()
+         ::Mapper:Step()
+      next
+   end if
+#else
+   for i := 1 to ppuCycles
       ::PPU:Step()
-		::Mapper:Step()
-	next
-	
+      ::Mapper:Step()
+   next
+#endif
 
 	//for i := 0 to  cpuCycles-1
 		//::APU:Step()
@@ -80,13 +93,43 @@ METHOD Step() CLASS Console
 
 	return cpuCycles
 
+METHOD StepFast() CLASS Console
+   local i, ppuCycles, cpuCycles
+
+   cpuCycles := ::CPU:Step()
+   ppuCycles := cpuCycles * 3
+
+#ifdef OTIMIZADO
+   for i := 1 to ppuCycles
+      ::PPU:FastStep()
+      ::Mapper:Step()
+   next
+#else
+   for i := 1 to ppuCycles
+      ::PPU:Step()
+      ::Mapper:Step()
+   next
+#endif
+
+   return cpuCycles
+
 METHOD StepFrame() CLASS Console
-	cpuCycles := 0
-	frame := ::PPU:Frame
-	do while frame == ::PPU:Frame
-		cpuCycles += ::Step()
-	enddo
-	return cpuCycles
+   local cpuCycles := 0, frame
+
+   frame := ::PPU:Frame
+   do while frame == ::PPU:Frame
+      cpuCycles += ::Step()
+   enddo
+   return cpuCycles
+
+METHOD StepFrameFast() CLASS Console
+   local cpuCycles := 0, frame
+
+   frame := ::PPU:Frame
+   do while frame == ::PPU:Frame
+      cpuCycles += ::StepFast()
+   enddo
+   return cpuCycles
 
 METHOD StepSeconds(seconds) CLASS Console
 	cycles := CPUFrequency * seconds
@@ -127,20 +170,15 @@ METHOD SetAudioSampleRate(sampleRate) CLASS Console
 	end if
 
 procedure aAloc(xC,xS)
-local i,aRet
-#define USE_HASH
-#ifdef USE_HASH
-
-aRet={=>}
-
-for i=1 to xS
-   aRet[i]=xC
-next
-
+local aRet
+#ifdef OTIMIZADO
+   aRet := array( xS )
+   aFill( aRet, xC )
 #else
-
-aRet:=array(xS)
-aFill(aRet,xC)
-
+   local i
+   aRet := {=>}
+   for i := 1 to xS
+      aRet[i] := xC
+   next
 #endif
 return aRet

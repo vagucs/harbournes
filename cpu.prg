@@ -1,5 +1,6 @@
-//#define XHB_BITOP // Habilita das operações | & ^^
+//#define XHB_BITOP // Habilita das opera??es | & ^^
 
+#include "nesopt.ch"
 #include "xhb.ch"
 #include "common.ch"
 #include "hbclass.ch"
@@ -149,6 +150,7 @@ CREATE CLASS CPU
    VAR stall     INIT 0 // number of cycles to stall
    VAR table     INIT {}
    VAR cOphash     INIT {=>}
+   VAR stepInfo    INIT {0, 0, 0} // endereco, PC, modo (reutilizado a cada instrucao)
    
    METHOD New(console)
    METHOD Reset()
@@ -423,7 +425,15 @@ METHOD Read16(address) CLASS CPU
    hi := ::Memory:Read(address + 1)
    return ((hi << 8) | lo)
 
-// read16bug emulates a 6502 bug that caused the low byte to wrap without
+/*
+func (cpu *CPU) read16bug(address uint16) uint16 {
+	a := address
+	b := (a & 0xFF00) | uint16(byte(a)+1)
+	lo := cpu.Read(a)
+	hi := cpu.Read(b)
+	return uint16(hi)<<8 | uint16(lo)
+*/
+   // read16bug emulates a 6502 bug that caused the low byte to wrap without
 // incrementing the high byte
 METHOD read16bug(address) CLASS CPU
    local a,b,lo,hi
@@ -433,7 +443,14 @@ METHOD read16bug(address) CLASS CPU
    hi := ::Memory:Read(b)
    return ((hi << 8) | lo)
 
+/*
 // push pushes a byte onto the stack
+func (cpu *CPU) push(value byte) {
+	cpu.Write(0x100|uint16(cpu.SP), value)
+	cpu.SP--
+}
+*/
+   // push pushes a byte onto the stack
 METHOD push(value) CLASS CPU
    ::Memory:Write( (0x100 | ::SP), value)
    ::SP--
@@ -548,7 +565,7 @@ METHOD Step(pPPU) CLASS CPU
 
    address     :=0
    pageCrossed := .f.
-   //clog("case")
+
    do case
       case mode=modeAbsolute
          //clog("modeAbsolute")
@@ -575,6 +592,7 @@ METHOD Step(pPPU) CLASS CPU
          address = ::read16bug(::Memory:Read(::PC + 1) + ::X )
       case mode=modeIndirect
          //clog("modeIndirect")
+         //address = cpu.read16bug(cpu.Read16(cpu.PC + 1))
          address = ::read16bug(::Read16(::PC + 1))
       case mode=modeIndirectIndexed
          //clog("modeIndirectIndexed")
@@ -585,6 +603,15 @@ METHOD Step(pPPU) CLASS CPU
          pageCrossed = pagesDiffer(address - ::Y, address)
       case mode=modeRelative
          //clog("modeRelative")
+         /*
+		   offset := uint16(cpu.Read(cpu.PC + 1))
+		   if offset < 0x80 {
+			   address = cpu.PC + 2 + offset
+		   } else {
+    			address = cpu.PC + 2 + offset - 0x100
+	   	}
+         
+         */
          offset := ::Memory:Read(::PC + 1)
          if offset < 0x80
             address = ::PC + 2 + offset
@@ -609,18 +636,20 @@ METHOD Step(pPPU) CLASS CPU
       ::Cycles += instructionPageCycles[opcode]
    end if
 
-//   clog("Address:",address)
-
    //#define ARRAY_OPCODE
    //#define HASH_OPCODE
    #define CASE_OPCODE
 
+   ::stepInfo[1] := address
+   ::stepInfo[2] := ::PC
+   ::stepInfo[3] := mode
+
    #ifdef ARRAY_OPCODE
-   eval(::table[opcode],{address, ::PC, mode})
+   eval(::table[opcode], ::stepInfo)
    #endif
    #ifdef HASH_OPCODE
    opcode--
-   eval(::cOphash[opcode],{address, ::PC, mode})
+   eval(::cOphash[opcode], ::stepInfo)
    #endif
    
    #ifdef CASE_OPCODE
@@ -628,517 +657,517 @@ METHOD Step(pPPU) CLASS CPU
 
    do case
       case opcode=0
-         ::brk({address, ::PC, mode})
+         ::brk(::stepInfo)
       case opcode=1
-         ::ora({address, ::PC, mode})
+         ::ora(::stepInfo)
       case opcode=2
-         ::kil({address, ::PC, mode})
+         ::kil(::stepInfo)
       case opcode=3
-         ::slo({address, ::PC, mode})
+         ::slo(::stepInfo)
       case opcode=4
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=5
-         ::ora({address, ::PC, mode})
+         ::ora(::stepInfo)
       case opcode=6
-         ::asl({address, ::PC, mode})
+         ::asl(::stepInfo)
       case opcode=7
-         ::slo({address, ::PC, mode})
+         ::slo(::stepInfo)
       case opcode=8
-         ::php({address, ::PC, mode})
+         ::php(::stepInfo)
       case opcode=9
-         ::ora({address, ::PC, mode})
+         ::ora(::stepInfo)
       case opcode=10
-         ::asl({address, ::PC, mode})
+         ::asl(::stepInfo)
       case opcode=11
-         ::anc({address, ::PC, mode})
+         ::anc(::stepInfo)
       case opcode=12
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=13
-         ::ora({address, ::PC, mode})
+         ::ora(::stepInfo)
       case opcode=14
-         ::asl({address, ::PC, mode})
+         ::asl(::stepInfo)
       case opcode=15
-         ::slo({address, ::PC, mode})
+         ::slo(::stepInfo)
       case opcode=16
-         ::bpl({address, ::PC, mode})
+         ::bpl(::stepInfo)
       case opcode=17
-         ::ora({address, ::PC, mode})
+         ::ora(::stepInfo)
       case opcode=18
-         ::kil({address, ::PC, mode})
+         ::kil(::stepInfo)
       case opcode=19
-         ::slo({address, ::PC, mode})
+         ::slo(::stepInfo)
       case opcode=20
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=21
-         ::ora({address, ::PC, mode})
+         ::ora(::stepInfo)
       case opcode=22
-         ::asl({address, ::PC, mode})
+         ::asl(::stepInfo)
       case opcode=23
-         ::slo({address, ::PC, mode})
+         ::slo(::stepInfo)
       case opcode=24
-         ::clc({address, ::PC, mode})
+         ::clc(::stepInfo)
       case opcode=25
-         ::ora({address, ::PC, mode})
+         ::ora(::stepInfo)
       case opcode=26
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=27
-         ::slo({address, ::PC, mode})
+         ::slo(::stepInfo)
       case opcode=28
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=29
-         ::ora({address, ::PC, mode})
+         ::ora(::stepInfo)
       case opcode=30
-         ::asl({address, ::PC, mode})
+         ::asl(::stepInfo)
       case opcode=31
-         ::slo({address, ::PC, mode})
+         ::slo(::stepInfo)
       case opcode=32
-         ::jsr({address, ::PC, mode})
+         ::jsr(::stepInfo)
       case opcode=33
-         ::and({address, ::PC, mode})
+         ::and(::stepInfo)
       case opcode=34
-         ::kil({address, ::PC, mode})
+         ::kil(::stepInfo)
       case opcode=35
-         ::rla({address, ::PC, mode})
+         ::rla(::stepInfo)
       case opcode=36
-         ::bit({address, ::PC, mode})
+         ::bit(::stepInfo)
       case opcode=37
-         ::and({address, ::PC, mode})
+         ::and(::stepInfo)
       case opcode=38
-         ::rol({address, ::PC, mode})
+         ::rol(::stepInfo)
       case opcode=39
-         ::rla({address, ::PC, mode})
+         ::rla(::stepInfo)
       case opcode=40
-         ::plp({address, ::PC, mode})
+         ::plp(::stepInfo)
       case opcode=41
-         ::and({address, ::PC, mode})
+         ::and(::stepInfo)
       case opcode=42
-         ::rol({address, ::PC, mode})
+         ::rol(::stepInfo)
       case opcode=43
-         ::anc({address, ::PC, mode})
+         ::anc(::stepInfo)
       case opcode=44
-         ::bit({address, ::PC, mode})
+         ::bit(::stepInfo)
       case opcode=45
-         ::and({address, ::PC, mode})
+         ::and(::stepInfo)
       case opcode=46
-         ::rol({address, ::PC, mode})
+         ::rol(::stepInfo)
       case opcode=47
-         ::rla({address, ::PC, mode})
+         ::rla(::stepInfo)
       case opcode=48
-         ::bmi({address, ::PC, mode})
+         ::bmi(::stepInfo)
       case opcode=49
-         ::and({address, ::PC, mode})
+         ::and(::stepInfo)
       case opcode=50
-         ::kil({address, ::PC, mode})
+         ::kil(::stepInfo)
       case opcode=51
-         ::rla({address, ::PC, mode})
+         ::rla(::stepInfo)
       case opcode=52
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=53
-         ::and({address, ::PC, mode})
+         ::and(::stepInfo)
       case opcode=54
-         ::rol({address, ::PC, mode})
+         ::rol(::stepInfo)
       case opcode=55
-         ::rla({address, ::PC, mode})
+         ::rla(::stepInfo)
       case opcode=56
-         ::sec({address, ::PC, mode})
+         ::sec(::stepInfo)
       case opcode=57
-         ::and({address, ::PC, mode})
+         ::and(::stepInfo)
       case opcode=58
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=59
-         ::rla({address, ::PC, mode})
+         ::rla(::stepInfo)
       case opcode=60
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=61
-         ::and({address, ::PC, mode})
+         ::and(::stepInfo)
       case opcode=62
-         ::rol({address, ::PC, mode})
+         ::rol(::stepInfo)
       case opcode=63
-         ::rla({address, ::PC, mode})
+         ::rla(::stepInfo)
       case opcode=64
-         ::rti({address, ::PC, mode})
+         ::rti(::stepInfo)
       case opcode=65
-         ::eor({address, ::PC, mode})
+         ::eor(::stepInfo)
       case opcode=66
-         ::kil({address, ::PC, mode})
+         ::kil(::stepInfo)
       case opcode=67
-         ::sre({address, ::PC, mode})
+         ::sre(::stepInfo)
       case opcode=68
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=69
-         ::eor({address, ::PC, mode})
+         ::eor(::stepInfo)
       case opcode=70
-         ::lsr({address, ::PC, mode})
+         ::lsr(::stepInfo)
       case opcode=71
-         ::sre({address, ::PC, mode})
+         ::sre(::stepInfo)
       case opcode=72
-         ::pha({address, ::PC, mode})
+         ::pha(::stepInfo)
       case opcode=73
-         ::eor({address, ::PC, mode})
+         ::eor(::stepInfo)
       case opcode=74
-         ::lsr({address, ::PC, mode})
+         ::lsr(::stepInfo)
       case opcode=75
-         ::alr({address, ::PC, mode})
+         ::alr(::stepInfo)
       case opcode=76
-         ::jmp({address, ::PC, mode})
+         ::jmp(::stepInfo)
       case opcode=77
-         ::eor({address, ::PC, mode})
+         ::eor(::stepInfo)
       case opcode=78
-         ::lsr({address, ::PC, mode})
+         ::lsr(::stepInfo)
       case opcode=79
-         ::sre({address, ::PC, mode})
+         ::sre(::stepInfo)
       case opcode=80
-         ::bvc({address, ::PC, mode})
+         ::bvc(::stepInfo)
       case opcode=81
-         ::eor({address, ::PC, mode})
+         ::eor(::stepInfo)
       case opcode=82
-         ::kil({address, ::PC, mode})
+         ::kil(::stepInfo)
       case opcode=83
-         ::sre({address, ::PC, mode})
+         ::sre(::stepInfo)
       case opcode=84
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=85
-         ::eor({address, ::PC, mode})
+         ::eor(::stepInfo)
       case opcode=86
-         ::lsr({address, ::PC, mode})
+         ::lsr(::stepInfo)
       case opcode=87
-         ::sre({address, ::PC, mode})
+         ::sre(::stepInfo)
       case opcode=88
-         ::cli({address, ::PC, mode})
+         ::cli(::stepInfo)
       case opcode=89
-         ::eor({address, ::PC, mode})
+         ::eor(::stepInfo)
       case opcode=90
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=91
-         ::sre({address, ::PC, mode})
+         ::sre(::stepInfo)
       case opcode=92
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=93
-         ::eor({address, ::PC, mode})
+         ::eor(::stepInfo)
       case opcode=94
-         ::lsr({address, ::PC, mode})
+         ::lsr(::stepInfo)
       case opcode=95
-         ::sre({address, ::PC, mode})
+         ::sre(::stepInfo)
       case opcode=96
-         ::rts({address, ::PC, mode})
+         ::rts(::stepInfo)
       case opcode=97
-         ::adc({address, ::PC, mode})
+         ::adc(::stepInfo)
       case opcode=98
-         ::kil({address, ::PC, mode})
+         ::kil(::stepInfo)
       case opcode=99
-         ::rra({address, ::PC, mode})
+         ::rra(::stepInfo)
       case opcode=100
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=101
-         ::adc({address, ::PC, mode})
+         ::adc(::stepInfo)
       case opcode=102
-         ::ror({address, ::PC, mode})
+         ::ror(::stepInfo)
       case opcode=103
-         ::rra({address, ::PC, mode})
+         ::rra(::stepInfo)
       case opcode=104
-         ::pla({address, ::PC, mode})
+         ::pla(::stepInfo)
       case opcode=105
-         ::adc({address, ::PC, mode})
+         ::adc(::stepInfo)
       case opcode=106
-         ::ror({address, ::PC, mode})
+         ::ror(::stepInfo)
       case opcode=107
-         ::arr({address, ::PC, mode})
+         ::arr(::stepInfo)
       case opcode=108
-         ::jmp({address, ::PC, mode})
+         ::jmp(::stepInfo)
       case opcode=109
-         ::adc({address, ::PC, mode})
+         ::adc(::stepInfo)
       case opcode=110
-         ::ror({address, ::PC, mode})
+         ::ror(::stepInfo)
       case opcode=111
-         ::rra({address, ::PC, mode})
+         ::rra(::stepInfo)
       case opcode=112
-         ::bvs({address, ::PC, mode})
+         ::bvs(::stepInfo)
       case opcode=113
-         ::adc({address, ::PC, mode})
+         ::adc(::stepInfo)
       case opcode=114
-         ::kil({address, ::PC, mode})
+         ::kil(::stepInfo)
       case opcode=115
-         ::rra({address, ::PC, mode})
+         ::rra(::stepInfo)
       case opcode=116
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=117
-         ::adc({address, ::PC, mode})
+         ::adc(::stepInfo)
       case opcode=118
-         ::ror({address, ::PC, mode})
+         ::ror(::stepInfo)
       case opcode=119
-         ::rra({address, ::PC, mode})
+         ::rra(::stepInfo)
       case opcode=120
-         ::sei({address, ::PC, mode})
+         ::sei(::stepInfo)
       case opcode=121
-         ::adc({address, ::PC, mode})
+         ::adc(::stepInfo)
       case opcode=122
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=123
-         ::rra({address, ::PC, mode})
+         ::rra(::stepInfo)
       case opcode=124
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=125
-         ::adc({address, ::PC, mode})
+         ::adc(::stepInfo)
       case opcode=126
-         ::ror({address, ::PC, mode})
+         ::ror(::stepInfo)
       case opcode=127
-         ::rra({address, ::PC, mode})
+         ::rra(::stepInfo)
       case opcode=128
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=129
-         ::sta({address, ::PC, mode})
+         ::sta(::stepInfo)
       case opcode=130
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=131
-         ::sax({address, ::PC, mode})
+         ::sax(::stepInfo)
       case opcode=132
-         ::sty({address, ::PC, mode})
+         ::sty(::stepInfo)
       case opcode=133
-         ::sta({address, ::PC, mode})
+         ::sta(::stepInfo)
       case opcode=134
-         ::stx({address, ::PC, mode})
+         ::stx(::stepInfo)
       case opcode=135
-         ::sax({address, ::PC, mode})
+         ::sax(::stepInfo)
       case opcode=136
-         ::dey({address, ::PC, mode})
+         ::dey(::stepInfo)
       case opcode=137
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=138
-         ::txa({address, ::PC, mode})
+         ::txa(::stepInfo)
       case opcode=139
-         ::xaa({address, ::PC, mode})
+         ::xaa(::stepInfo)
       case opcode=140
-         ::sty({address, ::PC, mode})
+         ::sty(::stepInfo)
       case opcode=141
-         ::sta({address, ::PC, mode})
+         ::sta(::stepInfo)
       case opcode=142
-         ::stx({address, ::PC, mode})
+         ::stx(::stepInfo)
       case opcode=143
-         ::sax({address, ::PC, mode})
+         ::sax(::stepInfo)
       case opcode=144
-         ::bcc({address, ::PC, mode})
+         ::bcc(::stepInfo)
       case opcode=145
-         ::sta({address, ::PC, mode})
+         ::sta(::stepInfo)
       case opcode=146
-         ::kil({address, ::PC, mode})
+         ::kil(::stepInfo)
       case opcode=147
-         ::ahx({address, ::PC, mode})
+         ::ahx(::stepInfo)
       case opcode=148
-         ::sty({address, ::PC, mode})
+         ::sty(::stepInfo)
       case opcode=149
-         ::sta({address, ::PC, mode})
+         ::sta(::stepInfo)
       case opcode=150
-         ::stx({address, ::PC, mode})
+         ::stx(::stepInfo)
       case opcode=151
-         ::sax({address, ::PC, mode})
+         ::sax(::stepInfo)
       case opcode=152
-         ::tya({address, ::PC, mode})
+         ::tya(::stepInfo)
       case opcode=153
-         ::sta({address, ::PC, mode})
+         ::sta(::stepInfo)
       case opcode=154
-         ::txs({address, ::PC, mode})
+         ::txs(::stepInfo)
       case opcode=155
-         ::tas({address, ::PC, mode})
+         ::tas(::stepInfo)
       case opcode=156
-         ::shy({address, ::PC, mode})
+         ::shy(::stepInfo)
       case opcode=157
-         ::sta({address, ::PC, mode})
+         ::sta(::stepInfo)
       case opcode=158
-         ::shx({address, ::PC, mode})
+         ::shx(::stepInfo)
       case opcode=159
-         ::ahx({address, ::PC, mode})
+         ::ahx(::stepInfo)
       case opcode=160
-         ::ldy({address, ::PC, mode})
+         ::ldy(::stepInfo)
       case opcode=161
-         ::lda({address, ::PC, mode})
+         ::lda(::stepInfo)
       case opcode=162
-         ::ldx({address, ::PC, mode})
+         ::ldx(::stepInfo)
       case opcode=163
-         ::lax({address, ::PC, mode})
+         ::lax(::stepInfo)
       case opcode=164
-         ::ldy({address, ::PC, mode})
+         ::ldy(::stepInfo)
       case opcode=165
-         ::lda({address, ::PC, mode})
+         ::lda(::stepInfo)
       case opcode=166
-         ::ldx({address, ::PC, mode})
+         ::ldx(::stepInfo)
       case opcode=167
-         ::lax({address, ::PC, mode})
+         ::lax(::stepInfo)
       case opcode=168
-         ::tay({address, ::PC, mode})
+         ::tay(::stepInfo)
       case opcode=169
-         ::lda({address, ::PC, mode})
+         ::lda(::stepInfo)
       case opcode=170
-         ::tax({address, ::PC, mode})
+         ::tax(::stepInfo)
       case opcode=171
-         ::lax({address, ::PC, mode})
+         ::lax(::stepInfo)
       case opcode=172
-         ::ldy({address, ::PC, mode})
+         ::ldy(::stepInfo)
       case opcode=173
-         ::lda({address, ::PC, mode})
+         ::lda(::stepInfo)
       case opcode=174
-         ::ldx({address, ::PC, mode})
+         ::ldx(::stepInfo)
       case opcode=175
-         ::lax({address, ::PC, mode})
+         ::lax(::stepInfo)
       case opcode=176
-         ::bcs({address, ::PC, mode})
+         ::bcs(::stepInfo)
       case opcode=177
-         ::lda({address, ::PC, mode})
+         ::lda(::stepInfo)
       case opcode=178
-         ::kil({address, ::PC, mode})
+         ::kil(::stepInfo)
       case opcode=179
-         ::lax({address, ::PC, mode})
+         ::lax(::stepInfo)
       case opcode=180
-         ::ldy({address, ::PC, mode})
+         ::ldy(::stepInfo)
       case opcode=181
-         ::lda({address, ::PC, mode})
+         ::lda(::stepInfo)
       case opcode=182
-         ::ldx({address, ::PC, mode})
+         ::ldx(::stepInfo)
       case opcode=183
-         ::lax({address, ::PC, mode})
+         ::lax(::stepInfo)
       case opcode=184
-         ::clv({address, ::PC, mode})
+         ::clv(::stepInfo)
       case opcode=185
-         ::lda({address, ::PC, mode})
+         ::lda(::stepInfo)
       case opcode=186
-         ::tsx({address, ::PC, mode})
+         ::tsx(::stepInfo)
       case opcode=187
-         ::las({address, ::PC, mode})
+         ::las(::stepInfo)
       case opcode=188
-         ::ldy({address, ::PC, mode})
+         ::ldy(::stepInfo)
       case opcode=189
-         ::lda({address, ::PC, mode})
+         ::lda(::stepInfo)
       case opcode=190
-         ::ldx({address, ::PC, mode})
+         ::ldx(::stepInfo)
       case opcode=191
-         ::lax({address, ::PC, mode})
+         ::lax(::stepInfo)
       case opcode=192
-         ::cpy({address, ::PC, mode})
+         ::cpy(::stepInfo)
       case opcode=193
-         ::cmp({address, ::PC, mode})
+         ::cmp(::stepInfo)
       case opcode=194
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=195
-         ::dcp({address, ::PC, mode})
+         ::dcp(::stepInfo)
       case opcode=196
-         ::cpy({address, ::PC, mode})
+         ::cpy(::stepInfo)
       case opcode=197
-         ::cmp({address, ::PC, mode})
+         ::cmp(::stepInfo)
       case opcode=198
-         ::dec({address, ::PC, mode})
+         ::dec(::stepInfo)
       case opcode=199
-         ::dcp({address, ::PC, mode})
+         ::dcp(::stepInfo)
       case opcode=200
-         ::iny({address, ::PC, mode})
+         ::iny(::stepInfo)
       case opcode=201
-         ::cmp({address, ::PC, mode})
+         ::cmp(::stepInfo)
       case opcode=202
-         ::dex({address, ::PC, mode})
+         ::dex(::stepInfo)
       case opcode=203
-         ::axs({address, ::PC, mode})
+         ::axs(::stepInfo)
       case opcode=204
-         ::cpy({address, ::PC, mode})
+         ::cpy(::stepInfo)
       case opcode=205
-         ::cmp({address, ::PC, mode})
+         ::cmp(::stepInfo)
       case opcode=206
-         ::dec({address, ::PC, mode})
+         ::dec(::stepInfo)
       case opcode=207
-         ::dcp({address, ::PC, mode})
+         ::dcp(::stepInfo)
       case opcode=208
-         ::bne({address, ::PC, mode})
+         ::bne(::stepInfo)
       case opcode=209
-         ::cmp({address, ::PC, mode})
+         ::cmp(::stepInfo)
       case opcode=210
-         ::kil({address, ::PC, mode})
+         ::kil(::stepInfo)
       case opcode=211
-         ::dcp({address, ::PC, mode})
+         ::dcp(::stepInfo)
       case opcode=212
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=213
-         ::cmp({address, ::PC, mode})
+         ::cmp(::stepInfo)
       case opcode=214
-         ::dec({address, ::PC, mode})
+         ::dec(::stepInfo)
       case opcode=215
-         ::dcp({address, ::PC, mode})
+         ::dcp(::stepInfo)
       case opcode=216
-         ::cld({address, ::PC, mode})
+         ::cld(::stepInfo)
       case opcode=217
-         ::cmp({address, ::PC, mode})
+         ::cmp(::stepInfo)
       case opcode=218
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=219
-         ::dcp({address, ::PC, mode})
+         ::dcp(::stepInfo)
       case opcode=220
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=221
-         ::cmp({address, ::PC, mode})
+         ::cmp(::stepInfo)
       case opcode=222
-         ::dec({address, ::PC, mode})
+         ::dec(::stepInfo)
       case opcode=223
-         ::dcp({address, ::PC, mode})
+         ::dcp(::stepInfo)
       case opcode=224
-         ::cpx({address, ::PC, mode})
+         ::cpx(::stepInfo)
       case opcode=225
-         ::sbc({address, ::PC, mode})
+         ::sbc(::stepInfo)
       case opcode=226
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=227
-         ::isc({address, ::PC, mode})
+         ::isc(::stepInfo)
       case opcode=228
-         ::cpx({address, ::PC, mode})
+         ::cpx(::stepInfo)
       case opcode=229
-         ::sbc({address, ::PC, mode})
+         ::sbc(::stepInfo)
       case opcode=230
-         ::inc({address, ::PC, mode})
+         ::inc(::stepInfo)
       case opcode=231
-         ::isc({address, ::PC, mode})
+         ::isc(::stepInfo)
       case opcode=232
-         ::inx({address, ::PC, mode})
+         ::inx(::stepInfo)
       case opcode=233
-         ::sbc({address, ::PC, mode})
+         ::sbc(::stepInfo)
       case opcode=234
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=235
-         ::sbc({address, ::PC, mode})
+         ::sbc(::stepInfo)
       case opcode=236
-         ::cpx({address, ::PC, mode})
+         ::cpx(::stepInfo)
       case opcode=237
-         ::sbc({address, ::PC, mode})
+         ::sbc(::stepInfo)
       case opcode=238
-         ::inc({address, ::PC, mode})
+         ::inc(::stepInfo)
       case opcode=239
-         ::isc({address, ::PC, mode})
+         ::isc(::stepInfo)
       case opcode=240
-         ::beq({address, ::PC, mode})
+         ::beq(::stepInfo)
       case opcode=241
-         ::sbc({address, ::PC, mode})
+         ::sbc(::stepInfo)
       case opcode=242
-         ::kil({address, ::PC, mode})
+         ::kil(::stepInfo)
       case opcode=243
-         ::isc({address, ::PC, mode})
+         ::isc(::stepInfo)
       case opcode=244
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=245
-         ::sbc({address, ::PC, mode})
+         ::sbc(::stepInfo)
       case opcode=246
-         ::inc({address, ::PC, mode})
+         ::inc(::stepInfo)
       case opcode=247
-         ::isc({address, ::PC, mode})
+         ::isc(::stepInfo)
       case opcode=248
-         ::sed({address, ::PC, mode})
+         ::sed(::stepInfo)
       case opcode=249
-         ::sbc({address, ::PC, mode})
+         ::sbc(::stepInfo)
       case opcode=250
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=251
-         ::isc({address, ::PC, mode})
+         ::isc(::stepInfo)
       case opcode=252
-         ::nop({address, ::PC, mode})
+         ::nop(::stepInfo)
       case opcode=253
-         ::sbc({address, ::PC, mode})
+         ::sbc(::stepInfo)
       case opcode=254
-         ::inc({address, ::PC, mode})
+         ::inc(::stepInfo)
       case opcode=255
-         ::isc({address, ::PC, mode})
+         ::isc(::stepInfo)
    end case
    #endif
 

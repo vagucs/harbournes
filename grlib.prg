@@ -105,26 +105,7 @@ gr_caixa3d(nlinha+1,ncoluna,nlinha2,ncoluna2,ccor)
 return nil
 
 function gr_caixa3d(nlinha,ncoluna,nlinha2,ncoluna2,ccor,cmodoexibe)
-local t_bordacaixa1,t_bordacaixa2,t_bordacaixa3,t_bordacaixa4,nlin,ccor1,ccor2
-if ccor=nil
-   ccor1:="w+/w"
-   ccor2:="n/w"
-else
-   ccor1:="w+/"+ccor
-   ccor2:="n/"+ccor
-end if
-if(cmodoexibe=nil,cmodoexibe:="E",cmodoexibe)
-t_bordacaixa1="зд    юЁ "
-t_bordacaixa2="д"
-t_bordacaixa3="©"
-t_bordacaixa4="ы"
-@ nlinha,ncoluna,nlinha2,ncoluna2 box t_bordacaixa1 color(iif(upper(cmodoexibe)="E",ccor1,ccor2))
-@ nlinha,ncoluna2 say t_bordacaixa3 color(iif(upper(cmodoexibe)="E",ccor2,ccor1))
-@ nlinha2,ncoluna2 say t_bordacaixa4 color(iif(upper(cmodoexibe)="E",ccor2,ccor1))
-@ nlinha2,ncoluna+1 say repl(t_bordacaixa2,(ncoluna2-ncoluna)-1) color(iif(upper(cmodoexibe)="E",ccor2,ccor1))
-for nlin=nlinha+1 to nlinha2-1
-   @ nlin,ncoluna2 say "Ё" color(iif(upper(cmodoexibe)="E",ccor2,ccor1))
-next
+@ nlinha,ncoluna,nlinha2,ncoluna2 box B_SINGLE + ' '
 
 function open_image(cImagem,nColuna,nLinha)
 local cImg
@@ -149,10 +130,18 @@ end if
 
 
 #pragma BEGINDUMP
+#include <stdio.h>
 #include <math.h>
 #include <allegro.h>
 #include <hbapi.h>
+#include <hbapiitm.h>
 #include "loadpng.h"
+
+static void nes_poll_keys( void )
+{
+   if( keyboard_needs_poll() )
+      poll_keyboard();
+}
 
 
 HB_FUNC(GR_CLEAR_BITMAP){
@@ -186,6 +175,149 @@ HB_FUNC(MAKECOL){
 }
 HB_FUNC(PUTPIXEL){
    putpixel((BITMAP *)hb_parnl(1),hb_parnl(2),hb_parnl(3),hb_parnl(4));
+}
+
+HB_FUNC( ALLEGKEYDOWN )
+{
+   int scancode = hb_parnl( 1 );
+   nes_poll_keys();
+   hb_retl( key[ scancode ] != 0 );
+}
+
+HB_FUNC( ALLEGESCAPEPRESSED )
+{
+   nes_poll_keys();
+   hb_retl( key[ KEY_ESC ] != 0 );
+}
+
+HB_FUNC( READ_NES_PAD1 )
+{
+   PHB_ITEM pArray = hb_itemArrayNew( 8 );
+
+   nes_poll_keys();
+
+   hb_arraySetL( pArray, 1, key[ KEY_Z ] != 0 );
+   hb_arraySetL( pArray, 2, key[ KEY_X ] != 0 );
+   hb_arraySetL( pArray, 3, ( key[ KEY_RSHIFT ] != 0 ) || ( key[ KEY_LSHIFT ] != 0 ) );
+   hb_arraySetL( pArray, 4, key[ KEY_ENTER ] != 0 );
+   hb_arraySetL( pArray, 5, key[ KEY_UP ] != 0 );
+   hb_arraySetL( pArray, 6, key[ KEY_DOWN ] != 0 );
+   hb_arraySetL( pArray, 7, key[ KEY_LEFT ] != 0 );
+   hb_arraySetL( pArray, 8, key[ KEY_RIGHT ] != 0 );
+
+   hb_itemReturn( pArray );
+}
+
+HB_FUNC( READ_NES_PAD2 )
+{
+   PHB_ITEM pArray = hb_itemArrayNew( 8 );
+
+   nes_poll_keys();
+
+   /* Teclado numerico: 1=A 3=B 0=Start .(del)=Select 8/2/4/6=direcional */
+   hb_arraySetL( pArray, 1, key[ KEY_1_PAD ] != 0 );
+   hb_arraySetL( pArray, 2, key[ KEY_3_PAD ] != 0 );
+   hb_arraySetL( pArray, 3, key[ KEY_DEL_PAD ] != 0 );
+   hb_arraySetL( pArray, 4, key[ KEY_0_PAD ] != 0 );
+   hb_arraySetL( pArray, 5, key[ KEY_8_PAD ] != 0 );
+   hb_arraySetL( pArray, 6, key[ KEY_2_PAD ] != 0 );
+   hb_arraySetL( pArray, 7, key[ KEY_4_PAD ] != 0 );
+   hb_arraySetL( pArray, 8, key[ KEY_6_PAD ] != 0 );
+
+   hb_itemReturn( pArray );
+}
+
+HB_FUNC( READ_NES_INPUT )
+{
+   PHB_ITEM pResult = hb_itemArrayNew( 5 );
+   PHB_ITEM pPad1   = hb_itemArrayNew( 8 );
+   PHB_ITEM pPad2   = hb_itemArrayNew( 8 );
+
+   nes_poll_keys();
+
+   hb_arraySetL( pPad1, 1, key[ KEY_Z ] != 0 );
+   hb_arraySetL( pPad1, 2, key[ KEY_X ] != 0 );
+   hb_arraySetL( pPad1, 3, ( key[ KEY_RSHIFT ] != 0 ) || ( key[ KEY_LSHIFT ] != 0 ) );
+   hb_arraySetL( pPad1, 4, key[ KEY_ENTER ] != 0 );
+   hb_arraySetL( pPad1, 5, key[ KEY_UP ] != 0 );
+   hb_arraySetL( pPad1, 6, key[ KEY_DOWN ] != 0 );
+   hb_arraySetL( pPad1, 7, key[ KEY_LEFT ] != 0 );
+   hb_arraySetL( pPad1, 8, key[ KEY_RIGHT ] != 0 );
+
+   hb_arraySetL( pPad2, 1, key[ KEY_1_PAD ] != 0 );
+   hb_arraySetL( pPad2, 2, key[ KEY_3_PAD ] != 0 );
+   hb_arraySetL( pPad2, 3, key[ KEY_DEL_PAD ] != 0 );
+   hb_arraySetL( pPad2, 4, key[ KEY_0_PAD ] != 0 );
+   hb_arraySetL( pPad2, 5, key[ KEY_8_PAD ] != 0 );
+   hb_arraySetL( pPad2, 6, key[ KEY_2_PAD ] != 0 );
+   hb_arraySetL( pPad2, 7, key[ KEY_4_PAD ] != 0 );
+   hb_arraySetL( pPad2, 8, key[ KEY_6_PAD ] != 0 );
+
+   hb_arraySet( pResult, 1, pPad1 );
+   hb_arraySet( pResult, 2, pPad2 );
+   hb_arraySetL( pResult, 3, key[ KEY_ESC ] != 0 );
+   hb_arraySetL( pResult, 4, key[ KEY_F9 ] != 0 );
+   hb_arraySetL( pResult, 5, key[ KEY_F10 ] != 0 );
+
+   hb_itemReturn( pResult );
+}
+
+HB_FUNC( NES_KEY_DEBUG )
+{
+   char buf[ 160 ];
+
+   nes_poll_keys();
+
+   sprintf( buf,
+      "RAW Z:%d X:%d EN:%d LS:%d RS:%d UP:%d DN:%d LT:%d RT:%d",
+      key[ KEY_Z ] != 0,
+      key[ KEY_X ] != 0,
+      key[ KEY_ENTER ] != 0,
+      key[ KEY_LSHIFT ] != 0,
+      key[ KEY_RSHIFT ] != 0,
+      key[ KEY_UP ] != 0,
+      key[ KEY_DOWN ] != 0,
+      key[ KEY_LEFT ] != 0,
+      key[ KEY_RIGHT ] != 0 );
+
+   hb_retc( buf );
+}
+
+HB_FUNC(PUTPIXELFAST){
+   BITMAP *bmp = (BITMAP *) hb_parnl(1);
+   int x = hb_parnl(2);
+   int y = hb_parnl(3);
+   int color = hb_parnl(4);
+   unsigned char *row;
+   int depth;
+
+   if( bmp == NULL )
+      return;
+
+   depth = bitmap_color_depth( bmp );
+
+   switch( depth )
+   {
+      case 8:
+         bmp->line[y][x] = (unsigned char) color;
+         break;
+      case 15:
+      case 16:
+         ((unsigned short *) bmp->line[y])[x] = (unsigned short) color;
+         break;
+      case 24:
+         row = bmp->line[y] + ( x * 3 );
+         row[0] = getb( color );
+         row[1] = getg( color );
+         row[2] = getr( color );
+         break;
+      case 32:
+         ((unsigned long *) bmp->line[y])[x] = (unsigned long) color;
+         break;
+      default:
+         putpixel( bmp, x, y, color );
+         break;
+   }
 }
 
 HB_FUNC(GETPIXEL){

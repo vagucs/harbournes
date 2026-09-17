@@ -2,8 +2,9 @@
 
 
 */
-#define XHB_BITOP // Habilita das operações | & ^^
+#define XHB_BITOP // Habilita das operaÃ§Ãµes | & ^^
 
+#include "nesopt.ch"
 #include "xhb.ch"
 
 procedure main(file)
@@ -127,9 +128,23 @@ Public Palette := {0x666666,0x002A88,0x1412A7,0x3B00A4,0x5C007E,0x6E00040,0x6C06
                    0xFFFEFF,0xC0DFFF,0xD3D2FF,0xE8C8FF,0xFBC2FF,0xFEC40EA,0xFECCC5,0xF7D8A5,; // 56
                    0xE4E594,0xCFEF96,0xBDF4AB,0xB3F3CC,0xB5EBF2,0xB8B80B8,0x000000,0x000000,} // 64
 
+Public PaletteColors := {}
+
+procedure initPaletteColors()
+local i, c, r, g, b
+   PaletteColors := array( 64 )
+   for i := 1 to 64
+      c := Palette[i]
+      r := int( c / 65536 ) % 256
+      g := int( c / 256 ) % 256
+      b := c % 256
+      PaletteColors[i] := makecol( r, g, b )
+   next
+return NIL
 
 procedure load_rom(cFilename)
 start_pub_var()
+initPaletteColors()
 
 //cFilename="nestest.nes"
 if !file(cFilename)
@@ -143,36 +158,38 @@ clear
 hNes=Console():New(cFilename)
 
 ? "----- Mapper"
-/*
 ? "PRG Banks(1): ",hNes:Mapper:prgBank
 ? "PRG Banks(2): ",hNes:Mapper:prgBank1
-? "PRG Banks(3): ",hNes:Mapper:prgBank2*/
-? "----- CHR"
+? "PRG Banks(3): ",hNes:Mapper:prgBank2
+//? "----- CHR"
 //xStr=left(hNes:Mapper:Cartridge:CHR,16)
 
-xV=""
-for i=1 to 16
-   xV+=hb_numtohex((hNes:Mapper:Cartridge:CHR[i]),2)+" "
-next
+//xV=""
+//for i=1 to 16
+//   xV+=hb_numtohex((hNes:Mapper:Cartridge:CHR[i]),2)+" "
+//next
 //xV+=" - "+xStr
-? xV
-? "----- PRG"
+//? xV
+//? "----- PRG"
 //xStr=left(hNes:Mapper:Cartridge:PRG,16)
 
-xV=""
-for i=1 to 16
-   xV+=hb_numtohex((hNes:Mapper:Cartridge:PRG[i]),2)+" "
-next
+//xV=""
+//for i=1 to 16
+//   xV+=hb_numtohex((hNes:Mapper:Cartridge:PRG[i]),2)+" "
+//next
 //xV+=" - "+xStr
-? xV
+//? xV
 
 //xStr=left(hNes:Mapper:Cartridge:PRG,16)
 
 //hNes:Reset()
 ? '-------------------------------'
+ShowNesControls()
 ? "Press a key to start emulation."
 INKEY(0)
 clear
+ShowNesControls()
+ShowEmuStatsPanel()
 
 //hNes:PPU:Reset()
 
@@ -180,35 +197,70 @@ lRun=.t.
 set cursor off
 uf=0
 xCPU=0
+lQuit=.f.
 do while .t.
-   //hNes:CPU:PrintInstruction()
-   //hNes:PPU:PPUStatus()
-   //hNes:CPU:PrintREG()
+
+   //NES_ToggleDebugKey()
+   //ShowPadDebug( hNes )
+
+#ifdef OTIMIZADO
+   aInput := ReadNesInput()
+   NES_AdjustFrameSkip( aInput )
+
+   for i := 1 to FrameSkipCount()
+      if i > 1
+         aInput := ReadNesInput()
+      end if
+      hNes:SetButtons1( aInput[1] )
+      hNes:SetButtons2( aInput[2] )
+      if aInput[3]
+         lQuit := .t.
+         exit
+      end if
+      if i < FrameSkipCount()
+         xCPu += hNes:StepFrameFast()
+      else
+         xCPu += hNes:StepFrame()
+      end if
+   next
+
+   if lQuit
+      exit
+   end if
+
+   if hNes:PPU:Frame # uf
+      uf := hNes:PPU:Frame
+      _stretch_sprite( _get_buffer(), hNes:PPU:front:Buffer(), 0, 0, 256 * 3, 240 * 3 )
+      if hNes:PPU:Frame % 10 = 0
+         @ 2, 97 say "Frame: " + str( uf )
+         @ 3, 97 say "CPU  : " + str( xCpu )
+         @ 4, 97 say "Skip : " + str( GetFrameSkip() )
+         @ 5, 97 say "F10 +SKip"
+         @ 6, 97 say "F9 -Skip"
+      end if
+      xCpu := 0
+   end if
+#else
+   hNes:SetButtons1( ReadNesKeyboard() )
+   hNes:SetButtons2( ReadNesKeyboard2() )
+   if NES_EscapePressed()
+      exit
+   end if
    xCPu++
    if hNes:PPU:Frame#uf .and. hNes:PPU:ScanLine=0
-   //if //hNes:PPU:ScanLine=261
-      //_draw_sprite(_get_buffer(),hNes:ppu:front:Buffer(),0,0)
-      //_draw_sprite(_get_buffer(),hNes:ppu:front:Buffer(),0,0)
-      //_stretch_sprite(_get_buffer(),hNes:ppu:back:Buffer(),0,0,256*3,240*3)
-      
       uf=hNes:PPU:Frame
-      //if uf>3
-      //   pLog:=.t.
-      //end if
       @ 2,97 say "Frame: "+str(uf)
       @ 3,97 say "CPU  : "+str(xCpu)
       xCpu  =0
-      
-      //if uf=5
-      //   inkey(0)
-      //   quit
-      //end if
-      
    end if
-
    hNes:Step()
+#endif
+
+   //hNes:CPU:PrintInstruction()
+   //inkey(0)
+
    if !lRun
-      tk=inkey(0)
+      tk=inkey()
       if chr(tk)$'Rr'
          lRun=.t.
       end if
@@ -221,7 +273,8 @@ do while .t.
          fclose(nH)                                 
          nH=fcreate("chr.bin")
          fwrite(nH,hNes:Cartridge:CHR,len(hNes:Cartridge:CHR))
-         fclose(nH)                                 
+         fclose(nH)     
+         alert("Dumped RAM, PRG and CHR")                            
       end if
       if chr(tk)$'Pp'
          clear
@@ -244,4 +297,5 @@ do while .t.
          hNes:PPU:CHRView()
       end if
    end if
+
 enddo

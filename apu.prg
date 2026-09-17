@@ -1,4 +1,4 @@
-//#define XHB_BITOP // Habilita das operações | & ^^
+//#define XHB_BITOP // Habilita das opera??es | & ^^
 
 #include "xhb.ch"
 #include "common.ch"
@@ -61,12 +61,12 @@ METHOD Step() CLASS Apu
 	cycle1 := ::cycle
 	::cycle++
 	cycle2 := ::cycle
-	::stepTimer()
+	//::stepTimer()
 	f1 := int((cycle1) / frameCounterRate)
 	f2 := int((cycle2) / frameCounterRate)
-	if f1 != f2
-		::stepFrameCounter()
-	end if
+	//if f1 != f2
+	//	::stepFrameCounter()
+	//end if
 	s1 := int((cycle1) / ::sampleRate)
 	s2 := int((cycle2) / ::sampleRate)
 	if s1 != s2

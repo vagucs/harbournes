@@ -1,4 +1,4 @@
-#define XHB_BITOP // Habilita das operações | & ^^
+#define XHB_BITOP // Habilita das operaÃ§Ãµes | & ^^
 
 #include "xhb.ch"
 #include "common.ch"
