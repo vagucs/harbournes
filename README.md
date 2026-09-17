@@ -31,7 +31,10 @@ I'm sorry, my time is short for the project, I hope someone collaborates.
 
 ### Screenshots
 
-![Screenshots](http://www.vagucs.com.br/emulator.png)
+![Screenshots](https://github.com/vagucs/harbournes/blob/main/screenshot/advisland.png)
+![Screenshots](https://github.com/vagucs/harbournes/blob/main/screenshot/mario.png)
+![Screenshots](https://github.com/vagucs/harbournes/blob/main/screenshot/mario3.png)
+![Screenshots](https://github.com/vagucs/harbournes/blob/main/screenshot/megaman.png)
 
 ### Versions
 
