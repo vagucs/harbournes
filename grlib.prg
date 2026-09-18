@@ -1,4 +1,16 @@
+/*
+Emulador NES
 
+Convertido do projeto https://github.com/fogleman/nes
+
+Wagner Nunes da Silva
+www.vagucs.com.br
+
+vagucs@gmail.com
+vagucs@vagucs.com.br
+vagucs@bol.com.br
+
+*/
 
 #include "box.ch" 
 #include "grlib.ch"
