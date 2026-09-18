@@ -58,7 +58,7 @@ header:NumRAM  :=asc(xHeader[9])
 // verify header magic number
 if header:Magic#'NES'+chr(0x1a)
    ? "Arquivo invalido."
-	return 'Invalida format'
+	return 'Invalid format'
 end if
 
 // mapper type
